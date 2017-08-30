@@ -25,17 +25,42 @@ void FormatterNode::debug_print(PrintStream &stream) {
 void SensorAnglesTextFormatter::consume(const SensorAnglesFrame& f) {
     uint32_t time = f.time.get_value(msec);
 
-    // Print each sensor on its own line.
-    for (uint32_t i = 0; i < f.sensors.size(); i++) {
-        DataChunkPrintStream printer(this, f.time, node_idx_);
-        const SensorAngles &angles = f.sensors[i];
-        printer.printf("ANG%d\t%u\t%d", i, time, f.fix_level);
-        for (uint32_t j = 0; j < num_cycle_phases; j++) {
-            printer.printf("\t");
-            if (f.fix_level == FixLevel::kCycleSynced && angles.updated_cycles[j] == f.cycle_idx - f.phase_id + j)
-                printer.printf("%.4f", angles.angles[j]);
+    uint32_t interval = 99;
+    if (time - prev_time > interval) {
+        // Print each sensor on its own line.
+        for (uint32_t i = 0; i < f.sensors.size(); i++) {
+            DataChunkPrintStream printer(this, f.time, node_idx_);
+            const SensorAngles &angles = f.sensors[i];
+            int length = 0;
+            buffer[0] = 0x16;
+            buffer[1] = 0x16;
+            buffer[2] = (char)i;
+            memcpy(&(buffer[3]), &time, 4);
+            memcpy(&(buffer[7]), (short*)(&f.fix_level), 2);
+            length = 9;
+
+            char mask = 0;
+            for (uint32_t j = 0; j < num_cycle_phases; j++) {
+                // printer.printf("\t");
+                if (f.fix_level == FixLevel::kCycleSynced && angles.updated_cycles[j] == f.cycle_idx - f.phase_id + j) {
+                    mask = mask | (1 << j);
+                }
+            }
+            buffer[length++] = mask;
+            // printer.printf("ANG%d\t%u\t%d", i, time, f.fix_level);
+            for (uint32_t j = 0; j < num_cycle_phases; j++) {
+                // printer.printf("\t");
+                if (f.fix_level == FixLevel::kCycleSynced && angles.updated_cycles[j] == f.cycle_idx - f.phase_id + j) {
+                    // printer.printf("%.4f", angles.angles[j]);
+                    memcpy(&(buffer[length]), &(angles.angles[j]), 4);
+                    length += 4;
+                }
+            }
+            // printer.printf("\n");
+            // buffer[length++] = '\n';
+            printer.write(buffer, length);
         }
-        printer.printf("\n");
+        prev_time = time;
     }
 }
 
@@ -50,15 +75,24 @@ std::unique_ptr<GeometryFormatter> GeometryFormatter::create(uint32_t idx, const
 
 // ======  GeometryTextFormatter  =============================================
 void GeometryTextFormatter::consume(const ObjectPosition& f) {
-    DataChunkPrintStream printer(this, f.time, node_idx_);
-    printer.printf("OBJ%d\t%u\t%d", f.object_idx, f.time.get_value(msec), f.fix_level);
-    if (f.fix_level >= FixLevel::kStaleFix) {
-        printer.printf("\t%.4f\t%.4f\t%.4f\t%.4f", f.pos[0], f.pos[1], f.pos[2], f.pos_delta);
-        if (f.q[0] != 1.0f) {  // Output quaternion if available.
-            printer.printf("\t%.4f\t%.4f\t%.4f\t%.4f", f.q[0], f.q[1], f.q[2], f.q[3]);
+    uint32_t time = f.time.get_value(msec);
+    // printer.printf("%llu\n", time);
+    uint32_t interval = 99;
+    if (time - prev_time > interval) {
+        DataChunkPrintStream printer(this, f.time, node_idx_);
+        printer.printf("OBJ%d\t%u\t%d", f.object_idx, time, f.fix_level);
+        if (f.fix_level >= FixLevel::kStaleFix) {
+            // commented out by poly
+            printer.printf("\t%.4f\t%.4f\t%.4f\t%.4f", f.pos[0], f.pos[1], f.pos[2], f.pos_delta);
+            // printer.printf("\t%.4f\t%.4f\t%.4f", f.pos[0], f.pos[1], f.pos[2]);
+            if (f.q[0] != 1.0f) {  // Output quaternion if available.
+                // commented out by poly
+                // printer.printf("\t%.4f\t%.4f\t%.4f\t%.4f", f.q[0], f.q[1], f.q[2], f.q[3]);
+            }
         }
+        printer.printf("\n");
+        prev_time = time;
     }
-    printer.printf("\n");
 }
 
 // ======  FormatterDef I/O  =====================================================

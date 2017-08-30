@@ -51,6 +51,9 @@ class SensorAnglesTextFormatter
 public:
     SensorAnglesTextFormatter(uint32_t idx, const FormatterDef &def) : FormatterNode(idx, def) {}
     virtual void consume(const SensorAnglesFrame& f);
+private:
+    uint32_t prev_time;
+    char buffer[256];
 };
 
 // Base class for geometry formatters.
@@ -69,6 +72,8 @@ class GeometryTextFormatter : public GeometryFormatter {
 public:
     GeometryTextFormatter(uint32_t idx, const FormatterDef &def) : GeometryFormatter(idx, def) {}
     virtual void consume(const ObjectPosition& f);
+private:
+    uint32_t prev_time;
 };
 
 
